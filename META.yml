@@ -1,0 +1,25 @@
+---
+name: WWW-Purolator-TrackingInfo
+version: 0.0101
+author:
+  - "'Zoffix <'zoffix@cpan.org'>"
+abstract: access Purolator's tracking information
+license: perl
+resources:
+  license: http://dev.perl.org/licenses/
+build_requires:
+  Test::More: 0
+requires:
+  Class::Data::Accessor: 0.04004
+  HTML::TableExtract: 2.1
+  LWP::UserAgent: 5.822
+configure_requires:
+  Module::Build: 0.34
+provides:
+  WWW::Purolator::TrackingInfo:
+    file: lib/WWW/Purolator/TrackingInfo.pm
+    version: 0.0101
+generated_by: Module::Build version 0.34
+meta-spec:
+  url: http://module-build.sourceforge.net/META-spec-v1.4.html
+  version: 1.4
