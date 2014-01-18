@@ -3,25 +3,25 @@ package WWW::Purolator::TrackingInfo;
 use warnings;
 use strict;
 
-our $VERSION = '0.0101';
+our $VERSION = '1.001';
+use 5.006;
 use LWP::UserAgent;
-use HTML::TableExtract;
-use base 'Class::Data::Accessor';
-__PACKAGE__->mk_classaccessors qw/
+use JSON::PP qw//;
+use base 'Class::Accessor::Grouped';
+__PACKAGE__->mk_group_accessors( simple => qw/
     error
-    info
-    ua
-/;
+    _ua
+/);
 
 sub new {
     my $class = shift;
     my %options = @_;
     my $self = bless {}, $class;
-    
-    $self->ua(
-          $options{ua}
-        ? $options{ua}
-        : LWP::UserAgent->new( agent => 'Opera 9.5', timeout => 30 ),
+
+    $self->_ua(
+        LWP::UserAgent->new(
+            agent => 'Mozilla/5.0 (X11; Ubuntu; Linux x86_64; rv:26.0) '
+                . 'Gecko/20100101 Firefox/26.0', timeout => 30 ),
     );
 
     return $self;
@@ -29,19 +29,17 @@ sub new {
 
 sub track {
     my ( $self, $pin ) = @_;
-    
-    $self->$_(undef) for qw/error info/;
 
-    my $res = $self->ua->get(
-        'https://eshiponline.purolator.com/ShipOnline/Public/Track'
-        . '/TrackingDetails.aspx?pup=Y&pin=' . $pin
+    $self->error(undef);
+
+    my $res = $self->_ua->get(
+        'http://www.purolator.com/en/ship-track/tracking-details.page?pin='
+            . $pin,
     );
-    
-    unless ( $res->is_success ) {
-        $self->error('Network error: ' . $res->status_line);
-        return;
-    }
-    
+
+    $res->is_success
+        or return $self->_set_error('Network error: ' . $res->status_line);
+
     return $self->_parse( $pin, $res->decoded_content );
 }
 
@@ -49,46 +47,61 @@ sub _parse {
     my ( $self, $pin, $content ) = @_;
 
     my %info = ( pin => $pin );
-    
-    ( $info{html} ) = $content =~ m|<div id="detailTable">(.+?)</div>|s;
 
-    my $te = HTML::TableExtract->new(
-        headers => [
-            'Scan Date',
-            'Scan Time',
-            qw/Status Comment/,
-        ],
+    my ( $z ) = $content =~ m{var jsHistoryTable = (\[.+?\]);}s;
+
+    my $history_table = eval {
+        JSON::PP->new->allow_singlequote->decode( $z );
+    };
+    $@
+    and return $self->_set_error(
+            'Error parsing Purolator\'s data: ' . $@
+            . '. Perhaps you supplied an invalid PIN/tracking number?'
+        );
+
+    for ( @$history_table ) {
+        my %data;
+        @data{qw/scan_date  scan_time  location  comment/} = @$_;
+        $_ =  \%data;
+    }
+
+    $info{history} = $history_table;
+
+
+    my ( $status_code ) = $content =~ m{
+        var \s+ detailsData \s+ =
+        \s+
+        \{
+            \s+ "trackingNumber" .+?
+            "status": \s+ '([^']+)'
+        }six;
+
+    my %possible_statuses = (
+        InTransit       => 'in transit',
+        Pickup          => 'package picked up',
+        DataReceived    => 'shipping label created',
+        Attention       => 'attention',
+        Delivered       => 'delivered',
     );
-    $te->parse( $content );
 
-    my ( $ts ) = $te->tables;
-    
-    if ( $ts ) {
-        my @details;
-        for my $row ( $ts->rows ) {
-            if ( defined $row->[2] and $row->[2] =~ /\bDelivered\b/ ) {
-                $info{is_delivered} = 1;
-            }
-            
-            push @details, {
-                scan_date   => $row->[0],
-                scan_time   => $row->[1],
-                status      => $row->[2],
-                comment     => $row->[3],
-            };
-        }
-        
-        $info{details} = \@details;
-    }
-    else {
-        $self->error('Error: invalid PIN or data is not available');
-        return;
-    }
-    
-    return $self->info( \%info );
+    $info{status}
+    = $possible_statuses{ $status_code } || 'unknown status code';
+
+    return \%info;
 }
 
-1;
+sub _set_error {
+    my ( $self, $error ) = @_;
+
+    $self->error( $error );
+
+    return;
+}
+
+q|
+I'd like to make the world a better place,
+but they won't give me the source code.
+|;
 __END__
 
 =head1 NAME
@@ -103,195 +116,150 @@ WWW::Purolator::TrackingInfo - access Purolator's tracking information
 
     my $t = WWW::Purolator::TrackingInfo->new;
 
-    my $info = $t->track('AJT1395053')
+    my $info = $t->track('320698592781')
         or die "Error: " . $t->error;
 
-    use Data::Dumper;
-    print Dumper $info;
+    if ( $info->{status} eq 'delivered' ) {
+        print "The package has been delivered! YEY!\n";
+    }
+    else {
+        print "Package's latest update is: $info->{history}[0]{comment}\n";
+    }
 
 =head1 DESCRIPTION
 
-This module probably does not provide fully blown functionality and is 
-rather simple; it does only what I needed it to do for my project, contact
-me if you need more functionality.
-
-The module accesses http://purolator.com/ and gets tracking information
-for the package from the given PIN (e.g. AJT1395053)
+The module accesses L<www.purolator.com|http://www.purolator.com>
+and gets tracking information for the package, using the provided
+PIN (tracking number, e.g. 320698592781).
 
 =head1 CONSTRUCTOR
 
     my $t = WWW::Purolator::TrackingInfo->new;
 
-    my $t = WWW::Purolator::TrackingInfo->new(
-        ua => LWP::UserAgent->new( agent => 'Opera 9.5', timeout => 30 ),
-    );
-
-Creates and returns a new C<WWW::Purolator::TrackingInfo> object. Takes
-the following arguments:__PACKAGE__->mk_classaccessors qw/
-    error
-    info
-    ua
-
-=head2 C<ua>
-
-    my $t = WWW::Purolator::TrackingInfo->new(
-        ua => LWP::UserAgent->new( agent => 'Opera 9.5', timeout => 30 ),
-    );
-
-B<Optional>. Specifies an L<LWP::UserAgent>-like object to use for accessing
-Purolator's site. B<Note:> since Purolator uses HTTPS, you'll most likely
-need to install L<Crypt::SSLeay> or something along those lines.
-Technically, this object can be anything that has a C<get()> method
-that functions exactly the same as the one present in L<LWP::UserAgent>.
-B<Defaults to:>
-
-    LWP::UserAgent->new( agent => 'Opera 9.5', timeout => 30 )
+Creates and returns a new C<WWW::Purolator::TrackingInfo> object.
+Does not take any arguments.
 
 =head1 METHODS/ACCESSORS
 
 =head2 C<track>
 
-    my $info = $t->track('AJT1399063')
+    my $info = $t->track('320698592781')
         or die $t->error;
 
-Instructs the object to obtain transit information from Purolator using
-a PIN. Currently takes one mandatory argument: Purolator's PIN for
-the package. B<On failure> (e.g. network error, or invalid PIN was
-specified) returns either C<undef> or an empty list depending on the
-context and the reason for failure will be available via C<error()> method.
-B<On success> returns a hashref with the following keys/values (explained 
-below this dump):
+Instructs the object to obtain tracking information from Purolator using
+a PIN. B<Takes> one mandatory argument: Purolator's PIN for
+the package (or "tracking number"; years after dealing with Purolator,
+I'm still unclear on their terminology).
+B<On failure> returns C<undef> or an empty list, depending on the
+context, and the reason for failure will be available
+via C<< ->error >> method.
+B<On success> returns a hashref with the following keys/values
+(sample abridged data):
 
-    $VAR1 = {
-    'pin' => 'AJT1399063',
-    'is_delivered' => 1,
-    'html' => '
-        <table>
-        <thead class="TableHeader">
-            <tr>
-                <td id="date">Scan Date</td>
-                <td id="time">Scan Time</td>
-                <td id="status">Status</td>
-                <td id="comment">Comment</td>
-            </tr>
-        </thead>
-        <tbody class="TableData2">
-            
-            <tr><td>2009/09/16</td><td>10:23</td><td>Delivered to JODY at RECEPTION of ARTHUR BOOKS at 192 WELLINGTON ST. EAST P6A2L0 via SAULT STE. MARIE, ON depot</td><td></td></tr>
-            
-            <tr><td>2009/09/16</td><td>09:45</td><td>On vehicle for delivery via SAULT STE. MARIE, ON depot</td><td></td></tr>
-            
-            <tr><td>2009/09/15</td><td>16:45</td><td>Picked up by Purolator via TORONTO SORT CTR/CTR TRIE, ON depot</td><td></td></tr>
-            
-        </tbody>
-        </table>
-        ',
-    'details' => [
-             {
-               'comment' => undef,
-               'status' => 'Delivered to JODY at RECEPTION of ARTHUR BOOKS at 192 WELLINGTON ST. EAST P6A2L0 via SAULT STE. MARIE, ON depot',
-               'scan_time' => '10:23',
-               'scan_date' => '2009/09/16'
-             },
-             {
-               'comment' => undef,
-               'status' => 'On vehicle for delivery via SAULT STE. MARIE, ON depot',
-               'scan_time' => '09:45',
-               'scan_date' => '2009/09/16'
-             },
-             {
-               'comment' => undef,
-               'status' => 'Picked up by Purolator via TORONTO SORT CTR/CTR TRIE, ON depot',
-               'scan_time' => '16:45',
-               'scan_date' => '2009/09/15'
-             },
-           ]
-        };
+    {
+        'status' => 'delivered'
+        'pin' => '320698611680',
+        'history' => [
+            {
+                'comment' => 'Shipping label created with reference(s): 2509543',
+                'location' => 'Purolator',
+                'scan_time' => '11:09:00',
+                'scan_date' => '2014-01-16'
+            }
+        ],
+    };
+
+=head3 C<status>
+
+    'in transit',
+    'package picked up',
+    'shipping label created',
+    'attention',
+    'delivered',
+
+The C<status> value will be one of the above values, with a possible
+additional one C<'unknown status code'>, though the unknown code
+likely would mean this module is broken. The values are self-explanatory,
+with exception of C<'attention'>, which means some unforseen event
+has happened with the delivery and the package status requires attention.
 
 =head3 C<pin>
 
-    print "This tracking info is for PIN: " . $t->info->{pin};
+    'pin' => '320698611680',
 
-=head3 C<is_delivered>
+This is the PIN/tracking number that was used to call
+C<< ->track >> with.
 
-    $t->info->{is_delivered}
-        and print "Package was delivered!";
+=head3 C<history>
 
-If the package was delivered, then C<is_delivered> key will be present
-and set to value C<1>.
+    'history' => [
+        {
+            'comment' => 'Shipment delivered to MARY at: RECEPTION',
+            'location' => 'Saskatoon, SK',
+            'scan_time' => '10:44:00',
+            'scan_date' => '2014-01-17'
+        },
+        {
+            'comment' => 'On vehicle for delivery',
+            'location' => 'Saskatoon, SK',
+            'scan_time' => '09:57:00',
+            'scan_date' => '2014-01-17'
+        },
+        {
+            'comment' => 'Arrived at sort facility',
+            'location' => 'Saskatoon, SK',
+            'scan_time' => '06:57:00',
+            'scan_date' => '2014-01-17'
+        },
+        {
+            'comment' => 'Picked up by Purolator at  CALGARY AB ',
+            'location' => 'Calgary, AB',
+            'scan_time' => '15:23:00',
+            'scan_date' => '2014-01-16'
+        },
+        {
+            'comment' => 'Shipping label created with reference(s): 2509543',
+            'location' => 'Purolator',
+            'scan_time' => '11:09:00',
+            'scan_date' => '2014-01-16'
+        }
+    ];
 
-=head3 C<html>
+The value is an arrayref of hashrefs. Each hashref specifies a line
+in package's tracking history, most recent first. Each
+hashref contains four keys:
 
-    print $t->info->{html};
+=head3 C<scan_date>
 
-The C<html> key will contain raw HTML of the tracking information table
-as it was displayed on Purolator's page; useful for displaying the info
-in a Web app.
+    'scan_date' => '2014-01-17'
 
-=head3 C<details>
+The date of this particular update.
 
-    $t->info->{is_delivered}
-        and print $t->info->{details}[0]{status};
+=head3 C<scan_time>
 
-The C<details> key will contain an arrayref of hashrefs. Each of those
-hashrefs represents a line of tracking info (i.e. the row in the 
-Purolator's tracking table). There are four keys in each of those 
-hashrefs:
+    'scan_time' => '15:23:00',
 
-=head4 C<scan_date>
+The time of this particular update.
 
-    'scan_date' => '2009/09/10'
+=head3 C<location>
 
-Specifies the date of the scan for the current entry. The format is the
-same as is displayed on Purolator's site.
+    'location' => 'Calgary, AB',
 
-=head4 C<scan_time>
+Location of where the update happened.
 
-    'scan_time' => '17:52',
+=head3 C<comment>
 
-Specifies the time of the scan for the current entry. The format is the
-same as is displayed on Purolator's site.
+    'comment' => 'Shipping label created with reference(s): 2509543',
 
-=head4 C<status>
-
-    'status' => 'Shipment In Transit via TORONTO SORT CTR/CTR TRIE, ON depot',
-
-Specifies the status of the package when the current entry was added.
-
-=head4 C<comment>
-
-    'comment' => undef,
-
-I never actually seen any comments there, but there is a column named
-"Comment" on Purolator's tracking table, so here it is. I assume these
-are for special comments in case of some trouble.
-
-=head2 C<info>
-
-    my $last_track_info = $t->info;
-
-Takes no arguments returns the same value last call to C<track()> method
-returned. See C<track()> method's description above for details.
+The comment/description of the update.
 
 =head2 C<error>
 
-    $t->track('AJT1399063')
+    $t->track('320698592781')
         or die $t->error;
 
-Takes no arguments. Returns a human readable reason for why 
-C<track()> method failed (if it did, of course).
-
-=head2 C<ua>
-
-    my $current_ua = $t->ua;
-    
-    $t->ua(
-        LWP::UserAgent->new( agent => 'Opera 9.5', timeout => 30 )
-    );
-
-Returns currently used L<LWP::UserAgent>-like object (see C<ua>
-constructor's argument). Takes one I<optional> argument that is
-the new object to use.
+Takes no arguments. Returns a human readable reason for why
+C<< ->track >> method failed.
 
 =head1 AUTHOR
 
@@ -303,7 +271,6 @@ the new object to use.
 Please report any bugs or feature requests to C<bug-www-purolator-trackinginfo at rt.cpan.org>, or through
 the web interface at L<http://rt.cpan.org/NoAuth/ReportBug.html?Queue=WWW-Purolator-TrackingInfo>.  I will be notified, and then you'll
 automatically be notified of progress on your bug as I make changes.
-
 
 =head1 SUPPORT
 
@@ -332,8 +299,6 @@ L<http://cpanratings.perl.org/d/WWW-Purolator-TrackingInfo>
 L<http://search.cpan.org/dist/WWW-Purolator-TrackingInfo/>
 
 =back
-
-
 
 =head1 COPYRIGHT & LICENSE
 

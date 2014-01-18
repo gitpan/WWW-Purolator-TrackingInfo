@@ -9,8 +9,8 @@ use WWW::Purolator::TrackingInfo;
 
 my $t = WWW::Purolator::TrackingInfo->new;
 
-$t->track(shift) # AJT1395052
+my $info = $t->track(shift) # 320698592781
     or die $t->error;
 
 use Data::Dumper;
-print Dumper $t->info;
+print Dumper $info;

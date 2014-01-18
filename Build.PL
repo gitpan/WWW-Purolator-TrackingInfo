@@ -9,14 +9,20 @@ my $builder = Module::Build->new(
     dist_version_from   => 'lib/WWW/Purolator/TrackingInfo.pm',
     build_requires => {
         'Test::More' => 0,
+        'Test::GetVolatileData' => 0,
+        'Test::Deep' => 0.112,
     },
     requires => {
-        'LWP::UserAgent'        => 5.822,
-        'HTML::TableExtract'    => 2.10,
-        'Class::Data::Accessor' => 0.04004,
+        'LWP::UserAgent'           => 6.00,
+        'JSON::PP'                 => 2.27203,
+        'Class::Accessor::Grouped' => 0.10010,
+        perl                    => 5.006,
     },
+    configure_requires => { 'Module::Build' => 0 },
     add_to_cleanup      => [ 'WWW-Purolator-TrackingInfo-*' ],
     create_makefile_pl => 'traditional',
 );
-
+if ( $ENV{RELEASE_TESTING} ) {
+    system('pod2text lib/WWW/Purolator/TrackingInfo.pm > README');
+}
 $builder->create_build_script();
