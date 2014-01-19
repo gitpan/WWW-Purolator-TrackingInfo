@@ -3,7 +3,7 @@ package WWW::Purolator::TrackingInfo;
 use warnings;
 use strict;
 
-our $VERSION = '1.0103';
+our $VERSION = '1.0104';
 use 5.006;
 use LWP::UserAgent;
 use JSON::PP qw//;

@@ -1,5 +1,9 @@
 Revision history for WWW-Purolator-TrackingInfo
 
+1.0104  2014-01-18
+        - Doubled up the test, since I can obtain new tracking numbers
+          by the handful; makes sense to test more.
+
 1.0103  2014-01-18
         - Fixed a broken test
 
