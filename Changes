@@ -1,5 +1,11 @@
 Revision history for WWW-Purolator-TrackingInfo
 
+1.0105  2014-01-18
+        - Improved the return value to handle the 'Tracking system
+          currently unvailable' error
+        - Improved the tests to actually FAIL the tests, unless the
+          error is a Network error or Trac. Sys. Cur. Unavailable error.
+
 1.0104  2014-01-18
         - Doubled up the test, since I can obtain new tracking numbers
           by the handful; makes sense to test more.

@@ -38,7 +38,7 @@
    "provides" : {
       "WWW::Purolator::TrackingInfo" : {
          "file" : "lib/WWW/Purolator/TrackingInfo.pm",
-         "version" : "1.0104"
+         "version" : "1.0105"
       }
    },
    "release_status" : "stable",
@@ -47,5 +47,5 @@
          "http://dev.perl.org/licenses/"
       ]
    },
-   "version" : "1.0104"
+   "version" : "1.0105"
 }

@@ -3,7 +3,7 @@ package WWW::Purolator::TrackingInfo;
 use warnings;
 use strict;
 
-our $VERSION = '1.0104';
+our $VERSION = '1.0105';
 use 5.006;
 use LWP::UserAgent;
 use JSON::PP qw//;
@@ -47,6 +47,11 @@ sub _parse {
     my ( $self, $pin, $content ) = @_;
 
     my %info = ( pin => $pin );
+
+    $content =~ /Our online tracking system is currently unavailable/
+        and return $self->_set_error(
+            'Tracking system is currently unavailable'
+        );
 
     my ( $z ) = $content =~ m{var jsHistoryTable = (\[.+?\]);}s;
 

@@ -37,6 +37,10 @@ if ( $info ) {
 }
 else {
     diag 'Got error tracking: ' . $t->error ? $t->error : '[undefined]';
+    BAIL_OUT('Got unexpected error!')
+      unless $t->error
+      =~ /^Tracking system is currently unavailable|^Network error/;
+      
     ok(length $t->error, 'Error got something');
     diag q|Didn't get proper tracking info to do more tests.|;
 }
@@ -71,6 +75,9 @@ if ( $info2 ) {
 }
 else {
     diag 'Got error tracking: ' . $t->error ? $t->error : '[undefined]';
+    BAIL_OUT('Got unexpected error!')
+      unless $t->error
+      =~ /^Tracking system is currently unavailable|^Network error/;
     ok(length $t->error, 'Error got something');
     diag q|Didn't get proper tracking info to do more tests.|;
 }
