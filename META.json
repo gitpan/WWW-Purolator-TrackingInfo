@@ -4,7 +4,7 @@
       "'Zoffix <'zoffix@cpan.org'>"
    ],
    "dynamic_config" : 1,
-   "generated_by" : "Module::Build version 0.4007, CPAN::Meta::Converter version 2.132830",
+   "generated_by" : "Module::Build version 0.4204",
    "license" : [
       "perl_5"
    ],
@@ -38,7 +38,7 @@
    "provides" : {
       "WWW::Purolator::TrackingInfo" : {
          "file" : "lib/WWW/Purolator/TrackingInfo.pm",
-         "version" : "1.0102"
+         "version" : "1.0103"
       }
    },
    "release_status" : "stable",
@@ -47,5 +47,5 @@
          "http://dev.perl.org/licenses/"
       ]
    },
-   "version" : "1.0102"
+   "version" : "1.0103"
 }

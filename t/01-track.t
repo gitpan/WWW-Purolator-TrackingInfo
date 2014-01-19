@@ -21,7 +21,7 @@ if ( $info ) {
       $info,
         {
             'pin' => re('\w+'),
-            'status' => 'delivered',
+            'status' => re('^(in transit|package picked up|shipping label created|attention|delivered)$'),
             'history' => array_each(
                  {
                    'comment' => re('.+'),
